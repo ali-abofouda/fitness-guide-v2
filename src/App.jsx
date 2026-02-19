@@ -6,11 +6,16 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Clock, Lightbulb, ArrowDown,
   Droplets, Target, CalendarDays, Ruler, Weight,
   TrendingUp, Brain, CheckCircle2, Home, Check, Eye, X, Zap, Star, MessageCircle, HelpCircle,
+  LogIn, UserPlus, Globe, Save, Cpu, LogOut,
 } from 'lucide-react';
 import './App.css';
 import { exercises as rawExercises } from './data/exercises';
 import WorkoutSession from './WorkoutSession';
 import ExerciseBanner from './components/ExerciseBanner';
+import { useAuth } from './AuthContext';
+import { supabase } from './supabaseClient';
+import Login from './components/Login';
+import Register from './components/Register';
 
 /* ═══════════════════════════════════════════════════════════════
    ADAPTER — maps exercises.js schema → app internal schema
@@ -327,37 +332,97 @@ function clearLS() {
    MAIN APP
    ═══════════════════════════════════════════════════════════════ */
 function App() {
-  const savedForm = useRef(loadJSON(LS_KEY_FORM));
-  const savedDash = useRef(loadJSON(LS_KEY_DASH));
-  const sf = savedForm.current || {};
+  const {
+    session, loading, signOut,
+    isOnboardingComplete, setIsOnboardingComplete,
+    profileData, saveOnboardingData,
+  } = useAuth();
+  const [authPage, setAuthPage] = useState(null); // null | 'login' | 'register'
 
   const totalSteps = 3;
-  const [step, setStep] = useState(() => savedDash.current ? totalSteps : (sf.step ?? 0));
+  const [step, setStep] = useState(0);
 
-  const [userName, setUserName] = useState(() => sf.userName ?? '');
-  const [gender, setGender] = useState(() => sf.gender ?? 'male');
-  const [age, setAge] = useState(() => sf.age ?? '');
-  const [height, setHeight] = useState(() => sf.height ?? '');
-  const [weight, setWeight] = useState(() => sf.weight ?? '');
+  const [userName, setUserName] = useState('');
+  const [nameFromAuth, setNameFromAuth] = useState(false);
+  const [gender, setGender] = useState('male');
+  const [age, setAge] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
 
-  const [activity, setActivity] = useState(() => sf.activity ?? 'active');
-  const [goal, setGoal] = useState(() => sf.goal ?? 'lose');
-  const [location, setLocation] = useState(() => sf.location ?? 'gym');
-  const [days, setDays] = useState(() => sf.days ?? 4);
+  const [activity, setActivity] = useState('active');
+  const [goal, setGoal] = useState('lose');
+  const [location, setLocation] = useState('gym');
+  const [days, setDays] = useState(4);
 
-  const [injury, setInjury] = useState(() => sf.injury ?? 'None');
+  const [injury, setInjury] = useState('None');
 
-  const [dashboard, setDashboard] = useState(() => savedDash.current);
+  const [dashboard, setDashboard] = useState(null);
   const [activeDay, setActiveDay] = useState(0);
   const [errors, setErrors] = useState({});
-  const [doneSet, setDoneSet] = useState(() => {
-    const saved = loadJSON(LS_KEY_DONE);
-    return saved ? new Set(saved) : new Set();
-  });
+  const [doneSet, setDoneSet] = useState(new Set());
   const dashRef = useRef(null);
   const [workoutSessionOpen, setWorkoutSessionOpen] = useState(false);
   const [demoExercise, setDemoExercise] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
+
+  /* ── Auto-fill userName from Supabase auth metadata ── */
+  useEffect(() => {
+    if (session?.user) {
+      const meta = session.user.user_metadata;
+      const authName = meta?.full_name || '';
+      if (authName && !userName) {
+        setUserName(authName);
+        setNameFromAuth(true);
+      } else if (authName) {
+        setNameFromAuth(true);
+      }
+    }
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Restore wizard data from Supabase profile when onboarding is complete ── */
+  useEffect(() => {
+    if (isOnboardingComplete && profileData && !dashboard) {
+      const d = profileData;
+      // Restore form fields from saved profile
+      if (d.userName) setUserName(d.userName);
+      if (d.gender) setGender(d.gender);
+      if (d.age) setAge(String(d.age));
+      if (d.height) setHeight(String(d.height));
+      if (d.weight) setWeight(String(d.weight));
+      if (d.activity) setActivity(d.activity);
+      if (d.goal) setGoal(d.goal);
+      if (d.location) setLocation(d.location);
+      if (d.days) setDays(d.days);
+      if (d.injury) setInjury(d.injury);
+
+      // Regenerate the dashboard from saved data
+      const a = parseInt(d.age), h = parseInt(d.height), w = parseInt(d.weight);
+      if (!isNaN(a) && !isNaN(h) && !isNaN(w)) {
+        const bmi = calcBMI(w, h);
+        const bmiCat = getBMICategory(bmi);
+        const bmr = calcBMR(d.gender || 'male', w, h, a);
+        const tdee = calcTDEE(bmr, d.activity || 'active');
+        const cals = goalCalories(tdee, d.goal || 'lose');
+        const water = waterIntake(w);
+        const healthScore = calcHealthScore(bmi, d.activity || 'active', d.injury || 'None');
+        const template = getSplitTemplate(d.days || 4);
+        const schedule = generateSchedule(template, {
+          age: a, injury: d.injury || 'None', location: d.location || 'gym', goal: d.goal || 'lose',
+        });
+        setDashboard({ bmi, bmiCat, tdee, cals, water, healthScore, schedule, ageNum: a });
+        setStep(totalSteps);
+      }
+    }
+  }, [isOnboardingComplete, profileData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Clear local state when switching users / logging out ── */
+  useEffect(() => {
+    if (!session) {
+      clearLS();
+      setDashboard(null);
+      setStep(0);
+    }
+  }, [session]);
 
   useEffect(() => {
     saveJSON(LS_KEY_FORM, { step, userName, gender, age, height, weight, activity, injury, goal, location, days });
@@ -397,7 +462,7 @@ function App() {
     });
   }
 
-  function generate() {
+  async function generate() {
     if (!validateStep()) return;
     const a = parseInt(age), h = parseInt(height), w = parseInt(weight);
     const bmi = calcBMI(w, h);
@@ -410,6 +475,18 @@ function App() {
     const template = getSplitTemplate(days);
     const schedule = generateSchedule(template, { age: a, injury, location, goal });
 
+    // Save wizard data to Supabase profiles table
+    if (session?.user) {
+      try {
+        await saveOnboardingData(session.user.id, {
+          userName, gender, age: a, height: h, weight: w,
+          activity, goal, location, days, injury,
+        });
+      } catch (err) {
+        console.error('Could not save profile, continuing locally:', err);
+      }
+    }
+
     setDashboard({ bmi, bmiCat, tdee, cals, water, healthScore, schedule, ageNum: a });
     setActiveDay(0);
     setDoneSet(new Set());
@@ -417,7 +494,7 @@ function App() {
     setTimeout(() => dashRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }
 
-  function reset() {
+  async function reset() {
     clearLS();
     setDashboard(null);
     setStep(0);
@@ -425,11 +502,207 @@ function App() {
     setActivity('active'); setInjury('None');
     setGoal('lose'); setLocation('gym'); setDays(4);
     setActiveDay(0); setDoneSet(new Set()); setErrors({});
+
+    // Clear profile data in Supabase so onboarding restarts
+    if (session?.user) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ step_one_data: {} })
+          .eq('id', session.user.id);
+      } catch { /* ignore */ }
+    }
+    setIsOnboardingComplete(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  const showWizard = step < totalSteps && !dashboard;
-  const showDash = !!dashboard;
+  // Routing logic based on session + onboarding status
+  // Condition 1: !session → Landing Page (handled above in early returns)
+  // Condition 2: session && !isOnboardingComplete → Force Wizard
+  // Condition 3: session && isOnboardingComplete → Dashboard
+  const showWizard = session && (!isOnboardingComplete || (step < totalSteps && !dashboard));
+  const showDash = session && isOnboardingComplete && !!dashboard;
+
+  /* ── Auth guard: if loading show spinner, if no session show landing/auth ── */
+  if (loading) {
+    return (
+      <div className="app">
+        <div className="bg-noise" />
+        <div className="bg-grid" />
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="auth-loading">
+          <Cpu size={36} className="spin" />
+          <span>جارٍ التحميل...</span>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Show Login or Register page ── */
+  if (!session && authPage === 'login') {
+    return (
+      <div className="app">
+        <div className="bg-noise" />
+        <div className="bg-grid" />
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
+        <Login onSwitchToRegister={() => setAuthPage('register')} />
+        <button className="auth-back-btn" onClick={() => setAuthPage(null)}>
+          <ChevronRight size={16} /> العودة للرئيسية
+        </button>
+      </div>
+    );
+  }
+
+  if (!session && authPage === 'register') {
+    return (
+      <div className="app">
+        <div className="bg-noise" />
+        <div className="bg-grid" />
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
+        <Register onSwitchToLogin={() => setAuthPage('login')} />
+        <button className="auth-back-btn" onClick={() => setAuthPage(null)}>
+          <ChevronRight size={16} /> العودة للرئيسية
+        </button>
+      </div>
+    );
+  }
+
+  /* ── No session and no auth page selected → Landing Page ── */
+  if (!session) {
+    return (
+      <div className="app">
+        <div className="bg-noise" />
+        <div className="bg-grid" />
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
+
+        {/* ── LANDING HERO ── */}
+        <header className="hero landing-hero">
+          <div className="hero-content">
+            <span className="hero-badge"><Flame size={14} /> Fitness Pro — SaaS</span>
+            <h1 className="hero-headline">رحلتك الرياضية، أذكى وأقوى</h1>
+            <p className="hero-sub">
+              احفظ تقدّمك، تابع أداءك من أي جهاز، ودع الذكاء الاصطناعي يبني لك خطة تدريب مثالية.
+            </p>
+            <div className="landing-cta-row">
+              <button className="hero-cta" onClick={() => setAuthPage('register')}>
+                <UserPlus size={18} /> انضم إلى Cyber Squad
+              </button>
+              <button className="hero-cta-secondary" onClick={() => setAuthPage('login')}>
+                <LogIn size={18} /> تسجيل الدخول
+              </button>
+            </div>
+          </div>
+          <div className="hero-shape shape-1" />
+          <div className="hero-shape shape-2" />
+        </header>
+
+        {/* ── VALUE PROPOSITION ── */}
+        <section className="features-section">
+          <h2 className="section-heading">
+            <Zap size={22} /> لماذا <span className="heading-accent">Fitness Pro؟</span>
+          </h2>
+          <div className="features-grid">
+            <div className="glass-card feature-card">
+              <div className="feature-icon"><Save size={28} /></div>
+              <h4>احفظ تقدّمك</h4>
+              <p>بياناتك وخططك محفوظة في السحابة. لن تفقد أي شيء حتى لو غيّرت جهازك.</p>
+            </div>
+            <div className="glass-card feature-card">
+              <div className="feature-icon"><Globe size={28} /></div>
+              <h4>وصول من أي مكان</h4>
+              <p>سجّل دخولك من الهاتف، التابلت، أو الكمبيوتر — خطتك جاهزة دائماً.</p>
+            </div>
+            <div className="glass-card feature-card">
+              <div className="feature-icon"><Cpu size={28} /></div>
+              <h4>تتبّع ذكي بالـ AI</h4>
+              <p>خوارزمية ذكية تحلل بياناتك وتبني جدولاً مخصصاً يناسب جسمك وأهدافك.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* ── TESTIMONIALS ── */}
+        <section className="testimonials-section">
+          <h2 className="section-heading">
+            <Star size={22} /> قصص <span className="heading-accent">نجاح</span>
+          </h2>
+          <div className="testimonials-grid">
+            <div className="glass-card testimonial-card">
+              <div className="testimonial-stars">★★★★★</div>
+              <p className="testimonial-text">"خسرت 12 كيلو في 3 أشهر بفضل الجدول الذكي. أفضل تطبيق عربي للياقة!"</p>
+              <div className="testimonial-author">
+                <div className="testimonial-avatar">م</div>
+                <div>
+                  <div className="testimonial-name">محمد العلي</div>
+                  <div className="testimonial-role">مستخدم منذ 6 أشهر</div>
+                </div>
+              </div>
+            </div>
+            <div className="glass-card testimonial-card">
+              <div className="testimonial-stars">★★★★★</div>
+              <p className="testimonial-text">"التطبيق يراعي إصابتي في الركبة ويقترح بدائل آمنة. شيء رائع فعلاً."</p>
+              <div className="testimonial-author">
+                <div className="testimonial-avatar">س</div>
+                <div>
+                  <div className="testimonial-name">سارة أحمد</div>
+                  <div className="testimonial-role">رياضية هاوية</div>
+                </div>
+              </div>
+            </div>
+            <div className="glass-card testimonial-card">
+              <div className="testimonial-stars">★★★★★</div>
+              <p className="testimonial-text">"بنيت عضلات واضحة خلال شهرين. الجدول الأسبوعي المنظم غيّر طريقة تمريني."</p>
+              <div className="testimonial-author">
+                <div className="testimonial-avatar">خ</div>
+                <div>
+                  <div className="testimonial-name">خالد يوسف</div>
+                  <div className="testimonial-role">لاعب كمال أجسام</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── FAQ ── */}
+        <section className="faq-section">
+          <h2 className="section-heading">
+            <HelpCircle size={22} /> الأسئلة <span className="heading-accent">الشائعة</span>
+          </h2>
+          <div className="faq-list">
+            {[
+              { q: 'هل التطبيق مجاني؟', a: 'نعم! جميع الميزات الأساسية متاحة مجاناً. هدفنا مساعدة المجتمع العربي في تحسين لياقته.' },
+              { q: 'هل بياناتي آمنة؟', a: 'بالتأكيد. نستخدم Supabase مع تشفير كامل وحماية على مستوى الصف (RLS) لضمان خصوصية بياناتك.' },
+              { q: 'هل يناسب المبتدئين؟', a: 'نعم، النظام يضبط صعوبة التمارين حسب مستواك ويقدم تعليمات مفصّلة مع إحماء وتهدئة.' },
+            ].map((item, i) => (
+              <div key={i} className="glass-card faq-item">
+                <button
+                  className={`faq-question ${openFaq === i ? 'open' : ''}`}
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                >
+                  <span>{item.q}</span>
+                  <ChevronDown size={18} className={`faq-chevron ${openFaq === i ? 'rotated' : ''}`} />
+                </button>
+                <div className={`faq-answer ${openFaq === i ? 'open' : ''}`}>
+                  <p>{item.a}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <footer className="site-footer">
+          <p>صُنع بـ ❤️ بواسطة <span className="footer-brand">Fitness Pro</span> — من أجل مجتمع أكثر صحة</p>
+          <p className="footer-copy">&copy; {new Date().getFullYear()} Fitness Pro. جميع الحقوق محفوظة.</p>
+        </footer>
+      </div>
+    );
+  }
 
   /* Exercises for the active day (for WorkoutSession) */
   const activeDayExercises = dashboard?.schedule?.[activeDay]?.exercises || [];
@@ -445,7 +718,7 @@ function App() {
       <div className="blob blob-2" />
       <div className="blob blob-3" />
 
-      {/* ══════════ HERO ══════════ */}
+      {/* ══════════ HERO (Logged-in Wizard view) ══════════ */}
       {!showDash && (
         <header className="hero">
           <div className="hero-content">
@@ -635,9 +908,14 @@ function App() {
                 <span className="dash-greeting">جاهز يا كابتن {userName}؟ 💪</span>
               )}
             </div>
-            <button className="reset-btn" onClick={reset}>
-              <ArrowDown size={16} style={{ transform: 'rotate(180deg)' }} /> خطة جديدة
-            </button>
+            <div className="dash-top-actions">
+              <button className="reset-btn" onClick={reset}>
+                <ArrowDown size={16} style={{ transform: 'rotate(180deg)' }} /> خطة جديدة
+              </button>
+              <button className="reset-btn logout-btn" onClick={signOut}>
+                <LogOut size={16} /> تسجيل الخروج
+              </button>
+            </div>
           </div>
 
           {/* ── Header Stats ── */}
@@ -817,113 +1095,7 @@ function App() {
         </section>
       )}
 
-      {/* ══════════ FEATURES SECTION ══════════ */}
-      {!showDash && (
-        <section className="features-section">
-          <h2 className="section-heading">
-            <Zap size={22} /> لماذا <span className="heading-accent">تختارنا؟</span>
-          </h2>
-          <div className="features-grid">
-            <div className="glass-card feature-card">
-              <div className="feature-icon"><Brain size={28} /></div>
-              <h4>خوارزمية ذكية</h4>
-              <p>محركنا يحلل بياناتك ويبني جدولاً مخصصاً يناسب جسمك وأهدافك — لا خطط عشوائية.</p>
-            </div>
-            <div className="glass-card feature-card">
-              <div className="feature-icon"><ShieldCheck size={28} /></div>
-              <h4>حماية من الإصابات</h4>
-              <p>نستبعد تلقائياً أي تمرين قد يؤثر على إصاباتك، لتتدرب بأمان وراحة بال.</p>
-            </div>
-            <div className="glass-card feature-card">
-              <div className="feature-icon"><Activity size={28} /></div>
-              <h4>+60 تمرين متنوع</h4>
-              <p>تمارين منزلية وجيم، من المبتدئين للمتقدمين، مع تعليمات عربية مفصّلة لكل تمرين.</p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ══════════ TESTIMONIALS ══════════ */}
-      {!showDash && (
-        <section className="testimonials-section">
-          <h2 className="section-heading">
-            <Star size={22} /> قصص <span className="heading-accent">نجاح</span>
-          </h2>
-          <div className="testimonials-grid">
-            <div className="glass-card testimonial-card">
-              <div className="testimonial-stars">★★★★★</div>
-              <p className="testimonial-text">"خسرت 12 كيلو في 3 أشهر بفضل الجدول الذكي. أفضل تطبيق عربي للياقة!"</p>
-              <div className="testimonial-author">
-                <div className="testimonial-avatar">م</div>
-                <div>
-                  <div className="testimonial-name">محمد العلي</div>
-                  <div className="testimonial-role">مستخدم منذ 6 أشهر</div>
-                </div>
-              </div>
-            </div>
-            <div className="glass-card testimonial-card">
-              <div className="testimonial-stars">★★★★★</div>
-              <p className="testimonial-text">"التطبيق يراعي إصابتي في الركبة ويقترح بدائل آمنة. شيء رائع فعلاً."</p>
-              <div className="testimonial-author">
-                <div className="testimonial-avatar">س</div>
-                <div>
-                  <div className="testimonial-name">سارة أحمد</div>
-                  <div className="testimonial-role">رياضية هاوية</div>
-                </div>
-              </div>
-            </div>
-            <div className="glass-card testimonial-card">
-              <div className="testimonial-stars">★★★★★</div>
-              <p className="testimonial-text">"بنيت عضلات واضحة خلال شهرين. الجدول الأسبوعي المنظم غيّر طريقة تمريني."</p>
-              <div className="testimonial-author">
-                <div className="testimonial-avatar">خ</div>
-                <div>
-                  <div className="testimonial-name">خالد يوسف</div>
-                  <div className="testimonial-role">لاعب كمال أجسام</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ══════════ FAQ ACCORDION ══════════ */}
-      {!showDash && (
-        <section className="faq-section">
-          <h2 className="section-heading">
-            <HelpCircle size={22} /> الأسئلة <span className="heading-accent">الشائعة</span>
-          </h2>
-          <div className="faq-list">
-            {[
-              {
-                q: 'هل التطبيق مجاني بالكامل؟',
-                a: 'نعم! جميع الميزات متاحة مجاناً بدون اشتراك أو إعلانات. هدفنا مساعدة المجتمع العربي في تحسين لياقته.',
-              },
-              {
-                q: 'هل يناسب المبتدئين بدون خبرة رياضية؟',
-                a: 'بالتأكيد. النظام يضبط صعوبة التمارين حسب مستواك ويقدم تعليمات مفصّلة لكل تمرين مع إحماء وتهدئة.',
-              },
-              {
-                q: 'هل يمكن التدرب في المنزل بدون معدات؟',
-                a: 'نعم، لدينا أكثر من 30 تمريناً بوزن الجسم فقط. اختر "المنزل" كمكان تدريب وسنبني لك خطة كاملة.',
-              },
-            ].map((item, i) => (
-              <div key={i} className="glass-card faq-item">
-                <button
-                  className={`faq-question ${openFaq === i ? 'open' : ''}`}
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                >
-                  <span>{item.q}</span>
-                  <ChevronDown size={18} className={`faq-chevron ${openFaq === i ? 'rotated' : ''}`} />
-                </button>
-                <div className={`faq-answer ${openFaq === i ? 'open' : ''}`}>
-                  <p>{item.a}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* ══════════ Logged-in: no features/testimonials/faq — they are on landing ══════════ */}
 
       {/* ══════════ FOOTER ══════════ */}
       <footer className="site-footer">

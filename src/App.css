@@ -319,6 +319,17 @@ body {
   border-bottom-width: 2px;
 }
 
+/* Name synced from auth */
+.name-synced-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 18px; border-radius: var(--r-md);
+  background: rgba(34, 197, 94, .06);
+  border: 1px solid rgba(34, 197, 94, .2);
+  font-size: .88rem; color: #86efac;
+  animation: fadeSlide .4s ease-out both;
+}
+.name-synced-badge strong { color: #fff; }
+
 /* ── Wizard Nav ── */
 .wizard-nav {
   display: flex; justify-content: space-between;
@@ -882,6 +893,262 @@ body {
 
 /* ═══════════════════════════════════════════════════════════════
    VIEW DEMO BUTTON & EXERCISE DEMO MODAL
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTH PAGES — Login / Register
+   ═══════════════════════════════════════════════════════════════ */
+.auth-page {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 80vh; padding: 60px 24px;
+}
+.auth-card {
+  width: 100%; max-width: 440px;
+  padding: 40px 36px 32px;
+  border-radius: var(--r-xl);
+  animation: slideUp .6s ease-out both;
+}
+.auth-header {
+  text-align: center; margin-bottom: 32px;
+}
+.auth-icon-wrap {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 56px; height: 56px; border-radius: var(--r-md);
+  background: var(--accent-soft); color: var(--accent);
+  margin-bottom: 18px;
+}
+.auth-title {
+  font-size: 1.4rem; font-weight: 800; color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.auth-subtitle {
+  font-size: .88rem; color: var(--text-secondary); line-height: 1.7;
+}
+.auth-form { display: flex; flex-direction: column; gap: 20px; }
+.auth-field { display: flex; flex-direction: column; gap: 6px; }
+.auth-field label {
+  font-size: .85rem; font-weight: 600; color: var(--text-secondary);
+}
+.auth-field input {
+  width: 100%; padding: 12px 4px;
+  font-size: .95rem; font-family: inherit;
+  color: var(--text-primary); background: transparent;
+  border: none; border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0; outline: none;
+  transition: border-color .3s, box-shadow .3s;
+}
+.auth-field input:focus {
+  border-bottom-color: var(--accent);
+  box-shadow: 0 2px 0 0 var(--accent);
+}
+.auth-field input::placeholder { color: var(--text-muted); }
+
+.auth-error {
+  font-size: .84rem; color: #fca5a5; text-align: center;
+  padding: 8px 12px; border-radius: var(--r-sm);
+  background: rgba(239, 68, 68, .08);
+  border: 1px solid rgba(239, 68, 68, .2);
+}
+.auth-success {
+  font-size: .84rem; color: #86efac; text-align: center;
+  padding: 8px 12px; border-radius: var(--r-sm);
+  background: rgba(34, 197, 94, .08);
+  border: 1px solid rgba(34, 197, 94, .2);
+}
+
+.auth-submit-btn {
+  width: 100%; padding: 14px; font-size: 1.05rem; font-weight: 700;
+  font-family: inherit; color: #111; border: none;
+  border-radius: var(--r-md); background: var(--gradient-accent);
+  cursor: pointer; box-shadow: var(--shadow-btn-glow);
+  transition: transform .2s, box-shadow .2s, opacity .2s;
+}
+.auth-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(204, 255, 0, 0.6);
+}
+.auth-submit-btn:disabled {
+  opacity: .6; cursor: not-allowed; transform: none;
+}
+
+.auth-switch {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; margin-top: 24px;
+  font-size: .88rem; color: var(--text-muted);
+}
+.auth-switch button {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; color: var(--accent);
+  font-family: inherit; font-size: .88rem; font-weight: 600;
+  cursor: pointer; transition: color .2s;
+}
+.auth-switch button:hover { color: var(--accent-light); }
+
+/* ─── Auth Step Slide Transition ─── */
+.auth-step-content {
+  animation: authSlideIn .45s cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes authSlideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── OTP Input Field ─── */
+.otp-field-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.otp-label {
+  font-size: .85rem; font-weight: 600; color: var(--text-secondary);
+}
+.otp-email-highlight {
+  color: var(--accent); font-weight: 700; direction: ltr;
+  display: inline-block;
+}
+.otp-icon-wrap {
+  background: rgba(34, 197, 94, .1) !important;
+  color: #22c55e !important;
+}
+
+.otp-input {
+  width: 100%; max-width: 280px;
+  padding: 16px 12px;
+  font-size: 2rem; font-weight: 800;
+  font-family: 'Courier New', 'Fira Code', monospace;
+  letter-spacing: 1rem;
+  text-align: center;
+  color: var(--accent);
+  background: rgba(204, 255, 0, .03);
+  border: 2px solid var(--accent-border);
+  border-radius: var(--r-md);
+  outline: none;
+  caret-color: var(--accent);
+  transition: border-color .3s, box-shadow .3s, background .3s;
+}
+.otp-input::placeholder {
+  color: rgba(204, 255, 0, .15);
+  letter-spacing: 1rem;
+}
+.otp-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(204, 255, 0, .15), 0 0 0 3px rgba(204, 255, 0, .06);
+  background: rgba(204, 255, 0, .05);
+}
+
+/* ─── OTP Shake Animation ─── */
+.otp-shake {
+  animation: otpShake .4s ease-in-out;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, .2) !important;
+}
+@keyframes otpShake {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-8px); }
+  30%      { transform: translateX(8px); }
+  45%      { transform: translateX(-6px); }
+  60%      { transform: translateX(6px); }
+  75%      { transform: translateX(-3px); }
+  90%      { transform: translateX(3px); }
+}
+
+/* ─── OTP Resend Row ─── */
+.otp-resend-row {
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 18px;
+}
+.otp-resend-timer {
+  font-size: .82rem; font-weight: 600; color: var(--text-muted);
+}
+.otp-resend-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none;
+  font-family: inherit; font-size: .85rem; font-weight: 600;
+  color: var(--accent); cursor: pointer;
+  transition: color .2s, transform .2s;
+}
+.otp-resend-btn:hover {
+  color: var(--accent-light);
+  transform: translateY(-1px);
+}
+
+/* ─── OTP Responsive ─── */
+@media (max-width: 480px) {
+  .otp-input {
+    max-width: 240px;
+    font-size: 1.6rem;
+    letter-spacing: .7rem;
+    padding: 14px 10px;
+  }
+}
+
+.auth-back-btn {
+  position: fixed; bottom: 24px; right: 24px; z-index: 10;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 20px; font-size: .85rem; font-weight: 600;
+  font-family: inherit; color: var(--text-secondary);
+  background: var(--bg-elevated); border: 1px solid var(--card-border);
+  border-radius: var(--r-full); cursor: pointer;
+  transition: all .2s;
+}
+.auth-back-btn:hover {
+  color: var(--text-primary); border-color: var(--accent-border);
+}
+
+/* ─── Auth Loading Spinner ─── */
+.auth-loading {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; gap: 16px;
+  color: var(--accent); font-size: 1rem; font-weight: 600;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin { animation: spin 1.2s linear infinite; }
+
+/* ─── Landing CTA Row ─── */
+.landing-cta-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 14px; flex-wrap: wrap;
+}
+.hero-cta-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 32px; font-size: 1.05rem; font-weight: 700;
+  font-family: inherit; color: var(--accent);
+  background: transparent; border: 2px solid var(--accent-border);
+  border-radius: var(--r-md); cursor: pointer;
+  transition: all .2s;
+}
+.hero-cta-secondary:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: 0 0 25px rgba(204, 255, 0, 0.15);
+}
+
+/* ─── Dashboard Top Actions ─── */
+.dash-top-actions {
+  display: flex; align-items: center; gap: 10px;
+}
+.logout-btn:hover {
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, .4) !important;
+}
+
+/* ─── Auth Responsive ─── */
+@media (max-width: 480px) {
+  .auth-card { padding: 28px 20px 24px; }
+  .auth-title { font-size: 1.2rem; }
+  .landing-cta-row { flex-direction: column; gap: 10px; }
+  .hero-cta-secondary { width: 100%; justify-content: center; }
+  .hero-cta { width: 100%; justify-content: center; }
+  .auth-back-btn { bottom: 16px; right: 16px; font-size: .8rem; padding: 8px 16px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VIEW DEMO BUTTON (Original)
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── View Demo Button on Card ── */
